@@ -46,6 +46,8 @@ uint8_t MultiplyTriple(uint8_t y) {
 uint8_t SubBytes(uint8_t a) {	
 
 	uint8_t y;
+
+	printf("%d %d %d\n", GET_BIT(a, 0), GET_BIT(a, 1), GET_BIT(a, 2));
 	// TODO compute the inverse y
 	y = a;
 	uint8_t ay = MultiplyTriple(y);
@@ -61,37 +63,45 @@ void KeySchedule() {
 	int i;
 	// The first round key is the original key
 	for (i = 0; i < NKC; i++) {
-		RoundKey[i] = Key[i];	
-	}
+		RoundKey[i] = Key[i];
+	}	
 
-	int test = 1;
+	int aux = 2;
 	for (i = 1; i <= NR; i++) {
-		uint8_t w4i = RoundKey[4 * i - 1];
+
+		printf("\nRound %d\n", i);
+		uint8_t w4i = Key[2 * i - 1];
+
+		printf("w41: %x\n", w4i);
 		// 3 bits left cyclic shift
-		uint8_t T = (w4i << 3) | (w4i >> (8 - 3));
-		printf("T: %x\n", T);
+		uint8_t T = (w4i << 1) | (w4i >> (8 - 1));
+		//uint8_t T = w4i << 3;
+		printf("T after shift: %x\n", T);
+		
 		T = SubBytes(T);
 		printf("T2: %x\n", T);
-		// TODO How to do this?
-		T = T ^ test;
-		test--;
 
-		RoundKey[4 * i] = RoundKey[4 * i - 4] ^ T;
-		RoundKey[4 * i + 1] = RoundKey[4 * i - 3] ^ RoundKey[4 * i];
-		RoundKey[4 * i + 2] = RoundKey[4 * i - 2] ^ RoundKey[4 * i + 1];
-		RoundKey[4 * i + 3] = RoundKey[4 * i - 1] ^ RoundKey[4 * i + 2];
+		// First time we xor with 010 and then with 100
+		T = T ^ aux;
+		aux *= 2;
+
+		// Calculate the rest of the round keys
+		RoundKey[4 * i] = Key[4 * i - 4] ^ T;
+		RoundKey[4 * i + 1] = Key[4 * i - 3] ^ Key[4 * i];
+		RoundKey[4 * i + 2] = Key[4 * i - 2] ^ Key[4 * i + 1];
+		RoundKey[4 * i + 3] = Key[4 * i - 1] ^ Key[4 * i + 2];
 	}
 
 	// Hard code Richard's keys for now
-	RoundKey[4] = 0x01;
-	RoundKey[5] = 0x00;
-	RoundKey[6] = 0x04;
-	RoundKey[7] = 0x00;
+	// RoundKey[4] = 0x01;
+	// RoundKey[5] = 0x00;
+	// RoundKey[6] = 0x04;
+	// RoundKey[7] = 0x00;
 
-	RoundKey[8] = 0x06;
-	RoundKey[9] = 0x04;
-	RoundKey[10] = 0x04;
-	RoundKey[11] = 0x00;
+	// RoundKey[8] = 0x06;
+	// RoundKey[9] = 0x04;
+	// RoundKey[10] = 0x04;
+	// RoundKey[11] = 0x00;
 
 
 	printf("Round keys: ");
@@ -106,25 +116,44 @@ uint8_t xtime(uint8_t x) {
   	return ((x << 1) ^ (((x >> 7) & 1) * 0x1b));
 }
 
-// Multiply each column seen as a polynomial (low to high defrees from up to bottom)
+// The ShiftRows() function shifts the rows in the state to the left.
+// Each row is shifted with different offset.
+// Offset = Row number. So the first row is not shifted.
+void ShiftRows(void) {
+  uint8_t temp;
+
+  // second row 1 column to left  
+  temp = (*state)[1][0];
+  (*state)[1][0] = (*state)[1][1];
+  (*state)[1][1] = (*state)[1][2];
+  (*state)[1][2] = temp;
+
+  // third row 2 columns to left
+  temp = (*state)[2][0];
+  (*state)[2][0] = (*state)[2][2];
+  (*state)[2][2] = (*state)[2][1];
+  (*state)[2][1] = temp;
+}
+
+// Multiply each column seen as a polynomial (low to high degrees from up to bottom)
 void MixColumns(void) {
   	uint8_t i;
   	uint8_t Tmp, Tm, t;
-  	for (i = 0; i < 3; i++) {  
+  	for (i = 0; i < 3; i++) {
     	t = (*state)[i][0];
     	Tmp = (*state)[i][0] ^ (*state)[i][1] ^ (*state)[i][2];
     	Tm = (*state)[i][0] ^ (*state)[i][1];
     	Tm = xtime(Tm);
     	(*state)[i][0] ^= Tm ^ Tmp;
 
-    	Tm = (*state)[i][1] ^ (*state)[i][2]; 
-    	Tm = xtime(Tm);  
+    	Tm = (*state)[i][1] ^ (*state)[i][2];
+    	Tm = xtime(Tm);
     	(*state)[i][1] ^= Tm ^ Tmp;
 
     	Tm = (*state)[i][2] ^ t;
     	Tm = xtime(Tm);
     	(*state)[i][2] ^= Tm ^ Tmp;
-  }
+  	}
 }
 
 // Adds the round key to state.
@@ -193,11 +222,17 @@ void encrypt(uint8_t *input, const uint8_t *key, uint8_t *output) {
 	for (round = 1; round <= NR; round++) {
 
 		//state = SubBytes(state);
-		printf("\nMixing columns..\n");
-		MixColumns();
+
+		printf("\nShifting rows...\n");
+		ShiftRows();
 		PrintState();
-		printf("\nAdd round key %d\n", round);
-		AddRoundKey(round);
+
+		printf("\nMixing columns...\n");
+		MixColumns();
+		PrintState();		
+		
+		printf("\nAdding round key %d...\n", round);
+		AddRoundKey(round);		
 		PrintState();
 	}	
 }
