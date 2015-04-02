@@ -31,8 +31,8 @@ void PrintBits(uint8_t from, uint8_t num) {
 
 /* 
 A = | 1 0 0 |   | y0 |   | 1 |
-	| 1 1 0 | x | y1 | + | 0 | mod 2
-	| 1 1 1 |   | y2 |   | 1 |
+    | 1 1 0 | x | y1 | + | 0 | mod 2
+    | 1 1 1 |   | y2 |   | 1 |
 */
 uint8_t MultiplyTriple(uint8_t y) {
 
@@ -48,15 +48,19 @@ uint8_t MultiplyTriple(uint8_t y) {
 }
 
 // For an entry a, computes its inverse y and then compute its transformation (weights low to high from up to bottom)
-uint8_t SubBytes(uint8_t a) {	
+uint8_t SubBytes(uint8_t a) {
 
 	uint8_t y;
 
 	printf("SubBytes: ");
 	PrintBits(a, 3);
 	
-	// TODO compute the inverse y
+	// Compute the inverse y
 	y = a;
+
+   	printf("Inverse: ");
+   	PrintBits(y, 3);
+
 	uint8_t ay = MultiplyTriple(y);
 
   	return ay;
@@ -75,7 +79,7 @@ void KeySchedule() {
 	int aux = 2;
 	for (i = 1; i <= NR; i++) {
 
-		printf("\nRound %d\n", i);
+		printf("\nRound key iteration %d\n", i);
 
 		uint8_t w2i = RoundKey[2 * i - 1];
 		printf("w2i: %x\n", w2i);
@@ -106,6 +110,18 @@ void KeySchedule() {
 		RoundKey[2 * i + 1] = RoundKey[2 * i - 1] ^ RoundKey[2 * i];
 	}
 
+	/*
+	K0 = 011100 100001 -> 1C 21
+	K1 = 011100 111101 -> 1C 3D
+	K2 = 100101 011000 -> 25 18
+	*/
+
+	// TODO Delete this
+	RoundKey[2] = 0x1C;
+	RoundKey[3] = 0x3D;
+	RoundKey[4] = 0x25;
+	RoundKey[5] = 0x18;
+
 	printf("\nRound keys: ");
 	for (i = 0; i < 6; i++) {
 		printf(" [%x] ", RoundKey[i]);
@@ -132,23 +148,7 @@ void ShiftRows(void) {
 
 // Multiply each column seen as a polynomial (low to high degrees from up to bottom)
 void MixColumns(void) {
-  	// uint8_t i;
-  	// uint8_t Tmp, Tm, t;
-  	// for (i = 0; i < 3; i++) {
-   //  	t = (*state)[i][0];
-   //  	Tmp = (*state)[i][0] ^ (*state)[i][1] ^ (*state)[i][2];
-   //  	Tm = (*state)[i][0] ^ (*state)[i][1];
-   //  	Tm = xtime(Tm);
-   //  	(*state)[i][0] ^= Tm ^ Tmp;
-
-   //  	Tm = (*state)[i][1] ^ (*state)[i][2];
-   //  	Tm = xtime(Tm);
-   //  	(*state)[i][1] ^= Tm ^ Tmp;
-
-   //  	Tm = (*state)[i][2] ^ t;
-   //  	Tm = xtime(Tm);
-   //  	(*state)[i][2] ^= Tm ^ Tmp;
-  	// }
+	// TODO
 }
 
 // Adds the round key to state.
@@ -177,7 +177,7 @@ void PrintState() {
  	   		printf(" %x ", (*state)[i][j]);
 		}
 		printf("\n");
-	}	
+	}
 }
 
 void encrypt(uint8_t *input, const uint8_t *key, uint8_t *output) {
@@ -198,9 +198,15 @@ void encrypt(uint8_t *input, const uint8_t *key, uint8_t *output) {
 
 	printf("\nStarting rounds..\n");
 
-	for (round = 1; round <= NR; round++) {
+	int i, j;
+	for (round = 1; round < NR; round++) {
 
-		//state = SubBytes(state);
+		printf("\nSubBytes...\n");		
+		for (i = 0; i < NB; i++) {
+			for (j = 0; i < NB; ++i) {
+				(*state)[i][j] = SubBytes((*state)[i][j]);
+			}			
+		}
 
 		printf("\nShifting rows...\n");
 		ShiftRows();
@@ -211,9 +217,22 @@ void encrypt(uint8_t *input, const uint8_t *key, uint8_t *output) {
 		PrintState();		
 		
 		printf("\nAdding round key %d...\n", round);
-		AddRoundKey(round);		
+		AddRoundKey(round);	
 		PrintState();
-	}	
+	}
+
+	printf("\nSubBytes...\n");		
+	for (i = 0; i < NB; i++) {
+		for (j = 0; i < NB; ++i) {
+			(*state)[i][j] = SubBytes((*state)[i][j]); 
+		}
+	}
+	ShiftRows();
+	AddRoundKey(NR);
+	
+	// 0x00 0x0F 0x08 0x03
+	printf("\nFinal:\n");
+	PrintState();
 }
 
 void decrypt(uint8_t* input, const uint8_t* key, uint8_t *output) {
