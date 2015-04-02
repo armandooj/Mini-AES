@@ -4,6 +4,7 @@ Mini AES Encryption
 
 #include "miniaes.h"
 #include <stdio.h>
+#include <stdlib.h>
 
 #define NR 2 // Number of rounds
 #define NB 2 // Number of columns
@@ -24,12 +25,20 @@ static uint8_t RoundKey[6] = {};
 uint8_t G[] = {2, 3, 1, 2};
 
 void PrintBits(uint8_t from, uint8_t num) {
+	
 	printf("[");
 	int i;
 	for (i = num - 1; i >= 0; i--) {
 		printf(" %d ", GET_BIT(from, i));
 	}
 	printf("]\n");
+}
+
+uint8_t Check3Bits(uint8_t number) {
+	if (number > 7) {
+		number ^= 0xB; // 1011
+	}
+	return number;
 }
 
 /* 
@@ -50,23 +59,53 @@ uint8_t MultiplyTriple(uint8_t y) {
 	return z0 + (z1 * 2) + (z2 * 4);
 }
 
+uint8_t MultiplyPol(uint8_t pol1, uint8_t pol2) {
+	
+	uint8_t i = 0;
+	uint8_t res = 0;
+	uint8_t j, k;
+
+	while (pol1) {
+		k = pol1 & 1;
+		pol1 >>= 1;
+		if (k) {
+			uint8_t j;
+			uint8_t aux = pol2;			
+			for (j = 0; j < i; j++) {
+				aux <<= 1;
+				if (aux & 8) {
+					aux ^= 11;
+				}
+			}
+			res ^= aux;
+		}
+		i++;
+	}
+	return res;
+}
+
+uint8_t inverse(uint8_t n) {
+	uint8_t n2, n4, n6;
+	n2 = MultiplyPol(n, n);
+	n4 = MultiplyPol(n2, n2);
+	n6 = MultiplyPol(n4, n2);
+	return n6;
+}
+
 // For an entry a, computes its inverse y and then compute its transformation (weights low to high from up to bottom)
 uint8_t SubBytes(uint8_t a) {
 
 	uint8_t y;
 
-	printf("SubBytes: ");
-	PrintBits(a, 3);
+	// printf("SubBytes: ");
+	// PrintBits(a, 3);
 	
 	// Compute the inverse y
-	y = a;
+	y = inverse(a);
+   	// printf("Inverse: ");
+   	// PrintBits(y, 3);
 
-   	printf("Inverse: ");
-   	PrintBits(y, 3);
-
-	uint8_t ay = MultiplyTriple(y);
-
-  	return ay;
+  	return MultiplyTriple(y);
 }
 
 // Generates NB(NR + 1) round keys from the cipherkey
@@ -98,11 +137,19 @@ void KeySchedule() {
 		uint8_t T2 = T & 7;
 		printf("T1: %x T2: %x\n", T1, T2);
 
+		PrintBits(T, 6);
 		T1 = SubBytes(T1);
 		T2 = SubBytes(T2);
+		// if (i == 2) {
+		// 	T1 = 5;
+		// 	T2 = 7;
+		// }
 		T = ((T1 << 3) & 56) + T2;
+		T = T1 + T2;
+
+		printf("new T1: %x new T2: %x\n", T1, T2);
 		printf("new T: %x\n", T);
-		// PrintBits(T, 6);
+		PrintBits(T, 6);
 
 		// First time we xor with 010 and then with 100
 		T = T ^ aux;
@@ -120,10 +167,10 @@ void KeySchedule() {
 	*/
 
 	// TODO Delete this
-	RoundKey[2] = 0x1C;
-	RoundKey[3] = 0x3D;
-	RoundKey[4] = 0x25;
-	RoundKey[5] = 0x18;
+	// RoundKey[2] = 0x1C;
+	// RoundKey[3] = 0x3D;
+	// RoundKey[4] = 0x25;
+	// RoundKey[5] = 0x18;
 
 	printf("\nRound keys: ");
 	for (i = 0; i < 6; i++) {
@@ -135,7 +182,7 @@ void KeySchedule() {
 // The ShiftRows() function shifts the rows in the state to the left.
 // Each row is shifted with different offset.
 // Offset = Row number. So the first row is not shifted.
-void ShiftRows(void) {
+void ShiftRows() {
   uint8_t temp;
 
   // second row 1 column to left
@@ -144,15 +191,8 @@ void ShiftRows(void) {
   (*state)[1][1] = temp;
 }
 
-uint8_t Check3Bits(uint8_t number) {
-	if (number > 7) {
-		number ^= 0xB; // 1011
-	}
-	return number;
-}
-
 // Multiply each column seen as a polynomial (low to high degrees from up to bottom) by the G matrix
-void MixColumns(void) {
+void MixColumns() {
 	int i;
 	for (i = 0; i < NB; i++) {		
 		// First number
@@ -221,7 +261,7 @@ void encrypt(uint8_t *input, const uint8_t *key, uint8_t *output) {
 		for (i = 0; i < NB; i++) {
 			for (j = 0; i < NB; ++i) {
 				(*state)[i][j] = SubBytes((*state)[i][j]);
-			}			
+			}
 		}
 		PrintState();
 
@@ -231,25 +271,31 @@ void encrypt(uint8_t *input, const uint8_t *key, uint8_t *output) {
 
 		printf("\nMixing columns...\n");
 		MixColumns();
-		PrintState();		
+		PrintState();
 		
 		printf("\nAdding round key %d...\n", round);
-		AddRoundKey(round);	
+		AddRoundKey(round);
 		PrintState();
 	}
 
-	printf("\nSubBytes...\n");		
 	for (i = 0; i < NB; i++) {
 		for (j = 0; i < NB; ++i) {
-			(*state)[i][j] = SubBytes((*state)[i][j]); 
+			(*state)[i][j] = SubBytes((*state)[i][j]);
 		}
 	}
+
 	ShiftRows();
 	AddRoundKey(NR);
 	
 	// 0x00 0x0F 0x08 0x03
 	printf("\nFinal:\n");
 	PrintState();
+
+	// Put the state matrix in the output
+	output[0] = (*state)[0][0];
+	output[1] = (*state)[0][1];
+	output[2] = (*state)[1][0];
+	output[3] = (*state)[1][1];
 }
 
 void decrypt(uint8_t *input, const uint8_t *key, uint8_t *output) {
