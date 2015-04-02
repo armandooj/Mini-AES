@@ -20,6 +20,9 @@ static const uint8_t *Key;
 // Array containing NB(NR + 1) round keys
 static uint8_t RoundKey[6] = {};
 
+// MixColumn matrix
+uint8_t G[] = {2, 3, 1, 2};
+
 void PrintBits(uint8_t from, uint8_t num) {
 	printf("[");
 	int i;
@@ -129,11 +132,6 @@ void KeySchedule() {
 	printf("\n");
 }
 
-uint8_t xtime(uint8_t x) {
-	// 7?
-  	return ((x << 1) ^ (((x >> 7) & 1) * 0x1b));
-}
-
 // The ShiftRows() function shifts the rows in the state to the left.
 // Each row is shifted with different offset.
 // Offset = Row number. So the first row is not shifted.
@@ -146,9 +144,27 @@ void ShiftRows(void) {
   (*state)[1][1] = temp;
 }
 
-// Multiply each column seen as a polynomial (low to high degrees from up to bottom)
+uint8_t Check3Bits(uint8_t number) {
+	if (number > 7) {
+		number ^= 0xB; // 1011
+	}
+	return number;
+}
+
+// Multiply each column seen as a polynomial (low to high degrees from up to bottom) by the G matrix
 void MixColumns(void) {
-	// TODO
+	int i;
+	for (i = 0; i < NB; i++) {		
+		// First number
+		uint8_t G0S0 = Check3Bits(G[0] * (*state)[0][i]);
+		uint8_t G1S1 = Check3Bits(G[1] * (*state)[1][i]);
+		(*state)[0][i] = G0S0 ^ G1S1;
+
+		// Second number
+		uint8_t G2S0 = Check3Bits(G[2] * (*state)[0][i]);
+		uint8_t G3S1 = Check3Bits(G[3] * (*state)[1][i]);
+		(*state)[1][i] = G2S0 ^ G3S1;
+	}
 }
 
 // Adds the round key to state.
@@ -207,6 +223,7 @@ void encrypt(uint8_t *input, const uint8_t *key, uint8_t *output) {
 				(*state)[i][j] = SubBytes((*state)[i][j]);
 			}			
 		}
+		PrintState();
 
 		printf("\nShifting rows...\n");
 		ShiftRows();
@@ -235,6 +252,6 @@ void encrypt(uint8_t *input, const uint8_t *key, uint8_t *output) {
 	PrintState();
 }
 
-void decrypt(uint8_t* input, const uint8_t* key, uint8_t *output) {
+void decrypt(uint8_t *input, const uint8_t *key, uint8_t *output) {
 	// Exactly the same but in the opposite way
 }
