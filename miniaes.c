@@ -6,7 +6,7 @@ Mini AES Encryption
 #include <stdio.h>
 
 #define NR 2 // Number of rounds
-#define NB 3 // Number of columns
+#define NB 2 // Number of columns
 #define NKC 2 // Number of key coeficients
 
 #define GET_BIT(a, k) ((a & ( 1 << k )) >> k)
@@ -20,32 +20,31 @@ static const uint8_t *Key;
 // Array containing NB(NR + 1) round keys
 static uint8_t RoundKey[6] = {};
 
-/* 
-A = | 1 0 0 |
-	| 1 1 0 |
-	| 1 1 1 |
-*/
-uint8_t A[] = {0x04, 0x06, 0x07};
-
-uint8_t MultiplyTriple(uint8_t y) {
-	int i, j;
-	uint8_t result = 0;
-	for (i = 0; i < 3; i++) {
-		uint8_t bit = 0;
-		int pos = 0;		
-		for (int j = 2; j >= 0; j--) {
-			bit += GET_BIT(A[i], j) * GET_BIT(y, pos);
-			// bit = 1;
-			// printf(" %x x %x", GET_BIT(A[i], j), GET_BIT(y, pos));
-			pos++;			
-		}
-
-		// printf("\n (%x) ", bit << i);
-		result += (bit << i);
-		// printf(" %x \n", GET_BIT(y, i));
+void PrintBits(uint8_t from, uint8_t num) {
+	printf("[");
+	int i;
+	for (i = num - 1; i >= 0; i--) {
+		printf(" %d ", GET_BIT(from, i));
 	}
+	printf("]\n");
+}
 
-	return result;
+/* 
+A = | 1 0 0 |   | y0 |   | 1 |
+	| 1 1 0 | x | y1 | + | 0 | mod 2
+	| 1 1 1 |   | y2 |   | 1 |
+*/
+uint8_t MultiplyTriple(uint8_t y) {
+
+	uint8_t y0 = GET_BIT(y, 0);
+	uint8_t y1 = GET_BIT(y, 1);
+	uint8_t y2 = GET_BIT(y, 2);
+
+	uint8_t z0 = y0 ^ 1;
+	uint8_t z1 = y0 ^ y1;
+	uint8_t z2 = y0 ^ y1 ^ y2 ^ 1;
+
+	return z0 + (z1 * 2) + (z2 * 4);
 }
 
 // For an entry a, computes its inverse y and then compute its transformation (weights low to high from up to bottom)
@@ -53,13 +52,14 @@ uint8_t SubBytes(uint8_t a) {
 
 	uint8_t y;
 
-	printf("%d %d %d\n", GET_BIT(a, 0), GET_BIT(a, 1), GET_BIT(a, 2));
+	printf("SubBytes: ");
+	PrintBits(a, 3);
+	
 	// TODO compute the inverse y
 	y = a;
 	uint8_t ay = MultiplyTriple(y);
 
-	// Can I do it just like this?
-  	return ay + 0x05 % 2;
+  	return ay;
 }
 
 // Generates NB(NR + 1) round keys from the cipherkey
@@ -82,10 +82,20 @@ void KeySchedule() {
 		
 		// 3 bits left cyclic shift
 		uint8_t T = (w2i << 3 | w2i >> 3) & 63;
-		printf("T (w2i << 3): %x\n", T);
-		
-		// T = SubBytes(T);
-		// printf("T2: %x\n", T);
+		printf("T (w2i << 3): %x\n", T);		
+
+		// T = T1 T2
+		// 3 left bits -> & 111000, and then shift them!
+		uint8_t T1 = (T & 56) >> 3;
+		// 3 right bits -> & 000111
+		uint8_t T2 = T & 7;
+		printf("T1: %x T2: %x\n", T1, T2);
+
+		T1 = SubBytes(T1);
+		T2 = SubBytes(T2);
+		T = ((T1 << 3) & 56) + T2;
+		printf("new T: %x\n", T);
+		// PrintBits(T, 6);
 
 		// First time we xor with 010 and then with 100
 		T = T ^ aux;
@@ -114,38 +124,31 @@ uint8_t xtime(uint8_t x) {
 void ShiftRows(void) {
   uint8_t temp;
 
-  // second row 1 column to left  
+  // second row 1 column to left
   temp = (*state)[1][0];
   (*state)[1][0] = (*state)[1][1];
-  (*state)[1][1] = (*state)[1][2];
-  (*state)[1][2] = temp;
-
-  // third row 2 columns to left
-  temp = (*state)[2][0];
-  (*state)[2][0] = (*state)[2][2];
-  (*state)[2][2] = (*state)[2][1];
-  (*state)[2][1] = temp;
+  (*state)[1][1] = temp;
 }
 
 // Multiply each column seen as a polynomial (low to high degrees from up to bottom)
 void MixColumns(void) {
-  	uint8_t i;
-  	uint8_t Tmp, Tm, t;
-  	for (i = 0; i < 3; i++) {
-    	t = (*state)[i][0];
-    	Tmp = (*state)[i][0] ^ (*state)[i][1] ^ (*state)[i][2];
-    	Tm = (*state)[i][0] ^ (*state)[i][1];
-    	Tm = xtime(Tm);
-    	(*state)[i][0] ^= Tm ^ Tmp;
+  	// uint8_t i;
+  	// uint8_t Tmp, Tm, t;
+  	// for (i = 0; i < 3; i++) {
+   //  	t = (*state)[i][0];
+   //  	Tmp = (*state)[i][0] ^ (*state)[i][1] ^ (*state)[i][2];
+   //  	Tm = (*state)[i][0] ^ (*state)[i][1];
+   //  	Tm = xtime(Tm);
+   //  	(*state)[i][0] ^= Tm ^ Tmp;
 
-    	Tm = (*state)[i][1] ^ (*state)[i][2];
-    	Tm = xtime(Tm);
-    	(*state)[i][1] ^= Tm ^ Tmp;
+   //  	Tm = (*state)[i][1] ^ (*state)[i][2];
+   //  	Tm = xtime(Tm);
+   //  	(*state)[i][1] ^= Tm ^ Tmp;
 
-    	Tm = (*state)[i][2] ^ t;
-    	Tm = xtime(Tm);
-    	(*state)[i][2] ^= Tm ^ Tmp;
-  	}
+   //  	Tm = (*state)[i][2] ^ t;
+   //  	Tm = xtime(Tm);
+   //  	(*state)[i][2] ^= Tm ^ Tmp;
+  	// }
 }
 
 // Adds the round key to state.
@@ -155,14 +158,14 @@ void AddRoundKey(uint8_t round) {
   	uint8_t i, j;
   	for (i = 0; i < NB; i++) {
     	for (j = 0; j < NB; j++ ) {
-      		(*state)[i][j] ^= RoundKey[round * NB * 3 + i * NB + j]; // TODO verify this is correct..
+      		(*state)[i][j] ^= RoundKey[round * NB * 2 + i * NB + j]; // TODO verify this is correct..
     	}
   	}
 }
 
 void BlockCopy(uint8_t *output, uint8_t *input) {
   	uint8_t i;
-  	for (i = 0; i < 9; i++) {
+  	for (i = 0; i < 4; i++) {
     	output[i] = input[i];
   	}
 }
@@ -189,7 +192,7 @@ void encrypt(uint8_t *input, const uint8_t *key, uint8_t *output) {
 
 	// Start with the first round
 	printf("\nAdd round key 0...\n");
-	uint8_t round = 0;	
+	uint8_t round = 0;
 	AddRoundKey(round);
 	PrintState();
 
