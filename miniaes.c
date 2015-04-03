@@ -116,7 +116,7 @@ void KeySchedule() {
 		RoundKey[i] = Key[i];
 	}
 
-	int aux = 2;
+	int xi = 2;
 	for (i = 1; i <= NR; i++) {
 
 		printf("\nRound key iteration %d\n", i);
@@ -143,8 +143,8 @@ void KeySchedule() {
 		T = ((T1 << 3) & 56) + T2;
 
 		// xor with 010 and then with 100 (both << 3).. and so on..
-		T = T ^ (aux << 3);
-		aux *= 2;
+		T = T ^ (xi << 3);
+		xi *= 2;
 
 		printf("new T1: %x new T2: %x\n", T1, T2);
 		printf("new T: %d\n", T);
@@ -166,18 +166,17 @@ void KeySchedule() {
 // Each row is shifted with different offset.
 // Offset = Row number. So the first row is not shifted.
 void ShiftRows() {
-  uint8_t temp;
-
-  // second row 1 column to left
-  temp = (*state)[1][0];
-  (*state)[1][0] = (*state)[1][1];
-  (*state)[1][1] = temp;
+	uint8_t temp;
+	// second row 1 column to left
+	temp = (*state)[1][1];
+	(*state)[1][1] = (*state)[0][1];
+	(*state)[0][1] = temp;
 }
 
 // Multiply each column seen as a polynomial (low to high degrees from up to bottom) by the G matrix
 void MixColumns() {
 	int i;
-	for (i = 0; i < NB; i++) {		
+	for (i = 0; i < NB; i++) {
 		// First number
 		uint8_t G0S0 = Check3Bits(G[0] * (*state)[0][i]);
 		uint8_t G1S1 = Check3Bits(G[1] * (*state)[1][i]);
@@ -188,15 +187,21 @@ void MixColumns() {
 		uint8_t G3S1 = Check3Bits(G[3] * (*state)[1][i]);
 		(*state)[1][i] = G2S0 ^ G3S1;
 	}
+
+	// (*state)[0][0] = 6;
+	// (*state)[0][1] = 1;
+	// (*state)[1][0] = 2;
+	// (*state)[1][1] = 0;	
 }
 
 // Adds the round key to state.
 // The round key is added to the state by an XOR function.
 void AddRoundKey(uint8_t round) {
-	(*state)[0][0] ^= (RoundKey[round] & 56) >> 3;
-	(*state)[0][1] ^= RoundKey[round] & 7;
-	(*state)[1][0] ^= (RoundKey[round + 1] & 56) >> 3;
-	(*state)[1][1] ^= RoundKey[round + 1] & 7;
+
+	(*state)[0][0] ^= (RoundKey[round * 2] & 56) >> 3;
+	(*state)[0][1] ^= RoundKey[round * 2] & 7;
+	(*state)[1][0] ^= (RoundKey[round * 2 + 1] & 56) >> 3;
+	(*state)[1][1] ^= RoundKey[round * 2 + 1] & 7;
 }
 
 void encrypt(uint8_t *input, const uint8_t *key, uint8_t *output) {
@@ -221,7 +226,7 @@ void encrypt(uint8_t *input, const uint8_t *key, uint8_t *output) {
 
 		printf("\nSubBytes...\n");	
 		for (i = 0; i < NB; i++) {
-			for (j = 0; i < NB; ++i) {
+			for (j = 0; j < NB; j++) {
 				(*state)[i][j] = SubBytes((*state)[i][j]);
 			}
 		}
@@ -242,10 +247,11 @@ void encrypt(uint8_t *input, const uint8_t *key, uint8_t *output) {
 
 	printf("\nSubBytes...\n");
 	for (i = 0; i < NB; i++) {
-		for (j = 0; i < NB; ++i) {
+		for (j = 0; j < NB; j++) {
 			(*state)[i][j] = SubBytes((*state)[i][j]);
 		}
 	}
+	PrintState();
 
 	printf("\nShifting rows...\n");
 	ShiftRows();
