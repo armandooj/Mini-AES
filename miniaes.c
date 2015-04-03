@@ -4,7 +4,6 @@ Mini AES Encryption
 
 #include "miniaes.h"
 #include <stdio.h>
-#include <stdlib.h>
 
 #define NR 2 // Number of rounds
 #define NB 2 // Number of columns
@@ -94,18 +93,8 @@ uint8_t inverse(uint8_t n) {
 
 // For an entry a, computes its inverse y and then compute its transformation (weights low to high from up to bottom)
 uint8_t SubBytes(uint8_t a) {
-
-	uint8_t y;
-
-	// printf("SubBytes: ");
-	// PrintBits(a, 3);
-	
-	// Compute the inverse y
-	y = inverse(a);
-   	// printf("Inverse: ");
-   	// PrintBits(y, 3);
-
-  	return MultiplyTriple(y);
+	// Return the inverse y
+  	return MultiplyTriple(inverse(a));
 }
 
 // Generates NB(NR + 1) round keys from the cipherkey
@@ -140,37 +129,22 @@ void KeySchedule() {
 		PrintBits(T, 6);
 		T1 = SubBytes(T1);
 		T2 = SubBytes(T2);
-		// if (i == 2) {
-		// 	T1 = 5;
-		// 	T2 = 7;
-		// }
+
+		// But it back together
 		T = ((T1 << 3) & 56) + T2;
-		T = T1 + T2;
+
+		// xor with 010 and then with 100 (both << 3).. and so on..
+		T = T ^ (aux << 3);
+		aux *= 2;
 
 		printf("new T1: %x new T2: %x\n", T1, T2);
-		printf("new T: %x\n", T);
-		PrintBits(T, 6);
-
-		// First time we xor with 010 and then with 100
-		T = T ^ aux;
-		aux *= 2;
+		printf("new T: %d\n", T);
+		PrintBits(T, 6);		
 
 		// Calculate the rest of the round keys
 		RoundKey[2 * i] = RoundKey[2 * i - 2] ^ T;
 		RoundKey[2 * i + 1] = RoundKey[2 * i - 1] ^ RoundKey[2 * i];
 	}
-
-	/*
-	K0 = 011100 100001 -> 1C 21
-	K1 = 011100 111101 -> 1C 3D
-	K2 = 100101 011000 -> 25 18
-	*/
-
-	// TODO Delete this
-	// RoundKey[2] = 0x1C;
-	// RoundKey[3] = 0x3D;
-	// RoundKey[4] = 0x25;
-	// RoundKey[5] = 0x18;
 
 	printf("\nRound keys: ");
 	for (i = 0; i < 6; i++) {
@@ -210,7 +184,6 @@ void MixColumns() {
 // Adds the round key to state.
 // The round key is added to the state by an XOR function.
 void AddRoundKey(uint8_t round) {
-
   	uint8_t i, j;
   	for (i = 0; i < NB; i++) {
     	for (j = 0; j < NB; j++ ) {
