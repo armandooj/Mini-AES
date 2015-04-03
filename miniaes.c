@@ -1,5 +1,5 @@
 /*
-Mini AES Encryption
+Mini-AES Encryption
 */
 
 #include "miniaes.h"
@@ -34,7 +34,7 @@ void PrintBits(uint8_t from, uint8_t num) {
 void PrintState() {
 	int i, j;
 	for (i = 0; i < NB; i++) {
-    	for (j = 0; j < NB; j++ ) {
+    	for (j = 0; j < NB; j++) {
  	   		printf(" %x ", (*state)[i][j]);
 		}
 		printf("\n");
@@ -175,23 +175,26 @@ void ShiftRows() {
 
 // Multiply each column seen as a polynomial (low to high degrees from up to bottom) by the G matrix
 void MixColumns() {
-	int i;
+
+	int i, j;
+	uint8_t temp[NB][NB];
+
 	for (i = 0; i < NB; i++) {
 		// First number
-		uint8_t G0S0 = Check3Bits(G[0] * (*state)[0][i]);
-		uint8_t G1S1 = Check3Bits(G[1] * (*state)[1][i]);
-		(*state)[0][i] = G0S0 ^ G1S1;
-
+		uint8_t G0S0 = MultiplyPol(G[0], (*state)[0][i]);
+		int8_t G1S1 = MultiplyPol(G[1], (*state)[1][i]);
+		temp[0][i] = G0S0 ^ G1S1;
 		// Second number
-		uint8_t G2S0 = Check3Bits(G[2] * (*state)[0][i]);
-		uint8_t G3S1 = Check3Bits(G[3] * (*state)[1][i]);
-		(*state)[1][i] = G2S0 ^ G3S1;
+		uint8_t G2S0 = MultiplyPol(G[2], (*state)[0][i]);
+		uint8_t G3S1 = MultiplyPol(G[3], (*state)[1][i]);
+		temp[1][i] = G2S0 ^ G3S1;
 	}
 
-	// (*state)[0][0] = 6;
-	// (*state)[0][1] = 1;
-	// (*state)[1][0] = 2;
-	// (*state)[1][1] = 0;	
+	// Put the matrix back in the state keeping the [w1 w2 w3 w4] format
+	(*state)[0][0] = temp[0][0];
+	(*state)[0][1] = temp[1][0];
+	(*state)[1][0] = temp[0][1];
+	(*state)[1][1] = temp[1][1];
 }
 
 // Adds the round key to state.
@@ -204,10 +207,18 @@ void AddRoundKey(uint8_t round) {
 	(*state)[1][1] ^= RoundKey[round * 2 + 1] & 7;
 }
 
+void BlockCopy(uint8_t *output, uint8_t *input) {
+  	uint8_t i;
+  	for (i = 0; i < 4; i++) {
+    	output[i] = input[i];
+  	}
+}
+
 void encrypt(uint8_t *input, const uint8_t *key, uint8_t *output) {
 
 	// We are going to work always on the intermediary state matrix, fill it
-  	state = (state_t *)input;
+	BlockCopy(output, input);
+  	state = (state_t *)output;
 	PrintState();
 
 	Key = key;

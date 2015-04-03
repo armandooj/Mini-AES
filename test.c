@@ -1,5 +1,4 @@
 #include <stdio.h>
-#include <stdlib.h>
 #include "miniaes.h"
 
 int main () {
@@ -11,6 +10,18 @@ int main () {
 
   uint8_t output[4];
 	encrypt(input, key, output);
+
+  // Print the results
+  int i;
+  printf("Input:\n");
+  for (i = 0; i < 4; i++) {
+    PrintBits(input[i], 3);
+  }
+  
+  printf("\nOutput:\n");
+  for (i = 0; i < 4; i++) {
+    PrintBits(output[i], 3);
+  }
 
 	return 0;
 }
