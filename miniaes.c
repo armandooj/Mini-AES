@@ -119,47 +119,29 @@ void KeySchedule() {
 	int xi = 2;
 	for (i = 1; i <= NR; i++) {
 
-		printf("\nRound key iteration %d\n", i);
-
-		uint8_t w2i = RoundKey[2 * i - 1];
-		printf("w2i: %x\n", w2i);
-		
+		uint8_t w2i = RoundKey[2 * i - 1];		
 		// 3 bits left cyclic shift
 		uint8_t T = (w2i << 3 | w2i >> 3) & 63;
-		printf("T (w2i << 3): %x\n", T);		
 
 		// T = T1 T2
 		// 3 left bits -> & 111000, and then shift them!
 		uint8_t T1 = (T & 56) >> 3;
 		// 3 right bits -> & 000111
 		uint8_t T2 = T & 7;
-		printf("T1: %x T2: %x\n", T1, T2);
 
-		PrintBits(T, 6);
 		T1 = SubBytes(T1);
 		T2 = SubBytes(T2);
 
 		// But it back together
 		T = ((T1 << 3) & 56) + T2;
-
 		// xor with 010 and then with 100 (both << 3).. and so on..
 		T = T ^ (xi << 3);
-		xi *= 2;
-
-		printf("new T1: %x new T2: %x\n", T1, T2);
-		printf("new T: %d\n", T);
-		PrintBits(T, 6);		
+		xi *= 2;	
 
 		// Calculate the rest of the round keys
 		RoundKey[2 * i] = RoundKey[2 * i - 2] ^ T;
 		RoundKey[2 * i + 1] = RoundKey[2 * i - 1] ^ RoundKey[2 * i];
 	}
-
-	printf("\nRound keys: ");
-	for (i = 0; i < 6; i++) {
-		printf(" [%x] ", RoundKey[i]);
-	}
-	printf("\n");
 }
 
 // The ShiftRows() function shifts the rows in the state to the left.
@@ -219,63 +201,35 @@ void encrypt(uint8_t *input, const uint8_t *key, uint8_t *output) {
 	// We are going to work always on the intermediary state matrix, fill it
 	BlockCopy(output, input);
   	state = (state_t *)output;
-	PrintState();
 
 	Key = key;
 	KeySchedule();
 
-	// Start with the first round
-	printf("\nAdd round key 0...\n");
 	uint8_t round = 0;
 	AddRoundKey(round);
-	PrintState();
-
-	printf("\nStarting rounds..\n");
 
 	int i, j;
 	for (round = 1; round < NR; round++) {
-
-		printf("\nSubBytes...\n");	
+		// SubBytes
 		for (i = 0; i < NB; i++) {
 			for (j = 0; j < NB; j++) {
 				(*state)[i][j] = SubBytes((*state)[i][j]);
 			}
 		}
-		PrintState();
-
-		printf("\nShifting rows...\n");
 		ShiftRows();
-		PrintState();
-
-		printf("\nMixing columns...\n");
 		MixColumns();
-		PrintState();
-		
-		printf("\nAdding round key %d...\n", round);
 		AddRoundKey(round);
-		PrintState();
 	}
 
-	printf("\nSubBytes...\n");
+	// SubBytes
 	for (i = 0; i < NB; i++) {
 		for (j = 0; j < NB; j++) {
 			(*state)[i][j] = SubBytes((*state)[i][j]);
 		}
 	}
-	PrintState();
-
-	printf("\nShifting rows...\n");
 	ShiftRows();
-	PrintState();
-
-	printf("\nAdding round key %d...\n", NR);
 	AddRoundKey(NR);
-	PrintState();
 	
-	// 0x00 0x0F 0x08 0x03
-	printf("\nFinal:\n");
-	PrintState();
-
 	// Put the state matrix in the output
 	output[0] = (*state)[0][0];
 	output[1] = (*state)[0][1];
