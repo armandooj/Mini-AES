@@ -14,12 +14,10 @@ Mini AES Encryption
 typedef uint8_t state_t[NB][NB];
 // Intermediate cipher result
 static state_t *state;
-
 // The original key
 static const uint8_t *Key;
 // Array containing NB(NR + 1) round keys
 static uint8_t RoundKey[6] = {};
-
 // MixColumn matrix
 uint8_t G[] = {2, 3, 1, 2};
 
@@ -31,6 +29,16 @@ void PrintBits(uint8_t from, uint8_t num) {
 		printf(" %d ", GET_BIT(from, i));
 	}
 	printf("]\n");
+}
+
+void PrintState() {
+	int i, j;
+	for (i = 0; i < NB; i++) {
+    	for (j = 0; j < NB; j++ ) {
+ 	   		printf(" %x ", (*state)[i][j]);
+		}
+		printf("\n");
+	}
 }
 
 uint8_t Check3Bits(uint8_t number) {
@@ -92,6 +100,7 @@ uint8_t inverse(uint8_t n) {
 }
 
 // For an entry a, computes its inverse y and then compute its transformation (weights low to high from up to bottom)
+// a -> 3 bits
 uint8_t SubBytes(uint8_t a) {
 	// Return the inverse y
   	return MultiplyTriple(inverse(a));
@@ -184,35 +193,15 @@ void MixColumns() {
 // Adds the round key to state.
 // The round key is added to the state by an XOR function.
 void AddRoundKey(uint8_t round) {
-  	uint8_t i, j;
-  	for (i = 0; i < NB; i++) {
-    	for (j = 0; j < NB; j++ ) {
-      		(*state)[i][j] ^= RoundKey[round * NB * 2 + i * NB + j]; // TODO verify this is correct..
-    	}
-  	}
-}
-
-void BlockCopy(uint8_t *output, uint8_t *input) {
-  	uint8_t i;
-  	for (i = 0; i < 4; i++) {
-    	output[i] = input[i];
-  	}
-}
-
-void PrintState() {
-	int i, j;
-	for (i = 0; i < NB; i++) {
-    	for (j = 0; j < NB; j++ ) {
- 	   		printf(" %x ", (*state)[i][j]);
-		}
-		printf("\n");
-	}
+	(*state)[0][0] ^= (RoundKey[round] & 56) >> 3;
+	(*state)[0][1] ^= RoundKey[round] & 7;
+	(*state)[1][0] ^= (RoundKey[round + 1] & 56) >> 3;
+	(*state)[1][1] ^= RoundKey[round + 1] & 7;
 }
 
 void encrypt(uint8_t *input, const uint8_t *key, uint8_t *output) {
 
-	// TODO Should I copy the input to output one by one?
-	BlockCopy(output, input);
+	// We are going to work always on the intermediary state matrix, fill it
   	state = (state_t *)input;
 	PrintState();
 
@@ -230,7 +219,7 @@ void encrypt(uint8_t *input, const uint8_t *key, uint8_t *output) {
 	int i, j;
 	for (round = 1; round < NR; round++) {
 
-		printf("\nSubBytes...\n");		
+		printf("\nSubBytes...\n");	
 		for (i = 0; i < NB; i++) {
 			for (j = 0; i < NB; ++i) {
 				(*state)[i][j] = SubBytes((*state)[i][j]);
@@ -251,14 +240,20 @@ void encrypt(uint8_t *input, const uint8_t *key, uint8_t *output) {
 		PrintState();
 	}
 
+	printf("\nSubBytes...\n");
 	for (i = 0; i < NB; i++) {
 		for (j = 0; i < NB; ++i) {
 			(*state)[i][j] = SubBytes((*state)[i][j]);
 		}
 	}
 
+	printf("\nShifting rows...\n");
 	ShiftRows();
+	PrintState();
+
+	printf("\nAdding round key %d...\n", NR);
 	AddRoundKey(NR);
+	PrintState();
 	
 	// 0x00 0x0F 0x08 0x03
 	printf("\nFinal:\n");
