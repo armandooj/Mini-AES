@@ -1,10 +1,12 @@
 # Mini-AES
-Mini-AES
+Mini-AES  
 A miniature version or Rijindael, the Advanced Encryption Standard.
 
-Compile:
-make
+1. Compilation:  
+  make
 
-Use:
-encrypt(uint8_t* input, const uint8_t* key, uint8_t *output)
-void decrypt(uint8_t* input, const uint8_t* key, uint8_t *output)
+2. Encryption:  
+  <code>encrypt(uint8_t* input, const uint8_t* key, uint8_t *output);</code>
+  
+3. Decryption:  
+  <code>void decrypt(uint8_t* input, const uint8_t* key, uint8_t *output);</code>
